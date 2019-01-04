@@ -1,6 +1,6 @@
 ; Boot loader for Atrium OS
 
-; Copyright (c) 2017-2018 Mislav Bozicevic
+; Copyright (c) 2017-2019 Mislav Bozicevic
 ; All rights reserved.
 
 ; Redistribution and use in source and binary forms, with or without
@@ -76,13 +76,15 @@ mov al, 0x01
 int 0x15
 
 ; VGA range is A000:0000 - A000:FFFF, so we need to switch the segment
-mov ax, 0xa000
+%define vga_segment 0xa000
+%define vga_columns 320
+%define vga_rows 200
+%define vga_color_dark_gray 0x08
+mov ax, vga_segment
 mov es, ax
 mov di, 0x0000
-; 320 x 200 = 64000 bytes
-mov cx, 0xfa00
-; dark gray
-mov al, 0x08
+mov cx, vga_columns * vga_rows
+mov al, vga_color_dark_gray
 cld
 rep stosb
 
@@ -92,10 +94,8 @@ mov word dx, [boot_drive_addr]
 ; reset disk system
 xor ax, ax
 mov es, ax
-mov ah, 0x00
-int 0x13
-or ah, ah
-jnz error_boot_sector
+call reset_disk_system
+jc error_boot_sector
 
 ; restore drive number
 mov word dx, [boot_drive_addr]
@@ -105,15 +105,18 @@ mov word dx, [boot_drive_addr]
 %define boot_code_second_step_addr 0x7e00
 xor ax, ax
 mov es, ax
-mov ah, 0x02
+; sectors to read count
 mov al, 17
+; cylinder
 mov ch, 0x00
+; sector
 mov cl, 0x02
+; head
 mov dh, 0x00
+; ES:BX is the buffer address pointer
 mov bx, boot_code_second_step_addr
-int 0x13
-or ah, ah
-jnz error_boot_sector
+call read_sectors
+jc error_boot_sector
 
 ; obtain the RAM map
 call detect_memory
@@ -121,6 +124,50 @@ jc error_boot_sector
 
 ; jump to the second stage of boot code
 jmp 0:boot_code_second_step_addr
+
+; Read sectors from disk.
+; Input:
+;  AL - number of sectors to read
+;  CH - cylinder
+;  CL - sector
+;  DH - head
+;  DL - drive number
+;  ES:BX - destination buffer address
+; On success, carry flag will be cleared.
+read_sectors:
+	pusha
+	; SI is used as the retry counter
+	mov si, 3
+
+	.read:
+	; read sectors function
+	mov ah, 0x02
+	int 0x13
+	; end on a successful read
+	jnc .end
+	; decrement the retry counter
+	dec si
+	; end if maximum retry count was exceeded
+	jc .end
+	call reset_disk_system
+	; retry if reset succeeded, otherwise end
+	jnc .read
+
+	.end:
+	popa
+	ret
+
+; Reset the disk system.
+; On success, carry flag will be cleared.
+reset_disk_system:
+	pusha
+
+	; reset disk system function (AH = 0x00)
+	xor ax, ax
+	int 0x13
+
+	popa
+	ret
 
 ; address where the system memory map list will be stored
 %define ram_map_addr 0x2005
@@ -194,13 +241,13 @@ detect_memory:
 	ret
 
 ; in case of an error in the boot sector code, paint the screen red and halt
+%define vga_color_bright_red 0x0c
 error_boot_sector:
-mov ax, 0xa000
+mov ax, vga_segment
 mov es, ax
 mov di, 0x0000
-mov cx, 0xfa00
-; bright red
-mov al, 0x0c
+mov cx, vga_columns * vga_rows
+mov al, vga_color_bright_red
 cld
 rep stosb
 
@@ -216,12 +263,59 @@ times 510 - ($ - $$) db 0
 ; boot signature
 dw 0xaa55
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; second stage boot loader begins here (loaded @ 0x007e00)
-nop
+;  it will:
+;  - load the OS image from disk to RAM (and draw the progress bar)
+;  - switch the CPU to protected mode
+;  - relocate the kernel to a high address
+;  - jump to kernel entry point
 
-; TODO switch to protected mode
+call draw_progress_bar_frame
 
+; TODO jump to the kernel code start
 jmp halt_boot_sector
+
+draw_progress_bar_frame:
+	; (60, 140) ... (260, 140)
+	%define vga_color_gray 0x07
+	mov ax, vga_segment
+	mov es, ax
+	mov di, 140 * vga_columns + 60
+	mov cx, 260 - 60
+	mov al, vga_color_gray
+	rep stosb
+
+	; (60, 160) ... (260, 160)
+	mov di, 160 * vga_columns + 60
+	mov cx, 260 - 60 + 1
+	rep stosb
+
+	; (60, 140) ... (60, 160)
+	mov cx, 20
+	mov ax, 160 * vga_columns + 60
+	.left_vertical:
+	sub ax, vga_columns
+	mov di, ax
+	mov byte [es:di], vga_color_gray
+	loop .left_vertical
+
+	; (260, 140) ... (260, 160)
+	mov cx, 20
+	mov ax, 160 * vga_columns + 260
+	.right_vertical:
+	sub ax, vga_columns
+	mov di, ax
+	mov byte [es:di], vga_color_gray
+	loop .right_vertical
+
+	ret
+
+; fill the rest of the second stage boot loader with zeroes
+times (512 + 8074) - ($ - $$) db 0
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; TODO: AtriumOS image (kernel, drivers, etc.) goes here
 
 ; fill the rest with zeroes
 times 1474560 - ($ - $$) db 0
