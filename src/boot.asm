@@ -1,4 +1,4 @@
-; Boot loader for Atrium OS
+; Boot loader for AtriumOS
 
 ; Copyright (c) 2017-2019 Mislav Bozicevic
 ; All rights reserved.
@@ -24,9 +24,6 @@
 ; CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 ; OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 ; OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-; Assemble with:
-; nasm boot.asm -fbin -o atrium.flp
 
 cpu 486
 
@@ -101,7 +98,7 @@ jc error_boot_sector
 mov word dx, [boot_drive_addr]
 
 ; read the second stage of boot code from disk
-;  (0, 0, 2) ... (0, 0, 18) -> 0x007e00 - 0x009d8a [8074 bytes]
+;  (0, 0, 2) ... (0, 0, 18) -> 0x007e00 - 0x009d8a [8704 bytes]
 %define boot_code_second_step_addr 0x7e00
 xor ax, ax
 mov es, ax
@@ -266,12 +263,13 @@ dw 0xaa55
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; second stage boot loader begins here (loaded @ 0x007e00)
 ;  it will:
-;  - load the OS image from disk to RAM (and draw the progress bar)
+;  - copy the OS image from disk to RAM (and draw the progress bar)
 ;  - switch the CPU to protected mode
 ;  - relocate the kernel to a high address
 ;  - jump to kernel entry point
 
 call draw_progress_bar_frame
+call copy_os_image_to_memory
 
 ; TODO jump to the kernel code start
 jmp halt_boot_sector
@@ -311,11 +309,20 @@ draw_progress_bar_frame:
 
 	ret
 
+; Copy OS image from disk to RAM.
+;  We assume high density floppy disk geometry:
+;  - 80 tracks (cylinders)
+;  - 18 sectors per track
+;  - 2 heads
+;  For simplicity, 900 sectors will be read one by one into the address range:
+;   0x00009d8b - 0x0007a58b (460800 bytes in total).
+;  Sectors read: from LBA 19 (0, 1, 1) until LBA 918 (25, 0, 18).
+;  Check out util/lba2chs.py to see how the calculation is performed.
+;  Buffer at 0x00001100 - 0x00001300 (512 bytes) is used as temporary storage.
+copy_os_image_to_memory:
+	; TODO
+	ret
+
 ; fill the rest of the second stage boot loader with zeroes
 times (512 + 8074) - ($ - $$) db 0
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; TODO: AtriumOS image (kernel, drivers, etc.) goes here
-
-; fill the rest with zeroes
-times 1474560 - ($ - $$) db 0
