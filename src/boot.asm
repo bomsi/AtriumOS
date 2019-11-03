@@ -98,18 +98,18 @@ jc error_boot_sector
 mov word dx, [boot_drive_addr]
 
 ; read the second stage of boot code from disk
-;  (0, 0, 2) ... (0, 0, 18) -> 0x007e00 - 0x009d8a [8704 bytes]
+;  (0, 0, 2) ... (0, 0, 18) -> 0x007e00 - 0x00a000 [8704 bytes]
 %define boot_code_second_step_addr 0x7e00
 xor ax, ax
 mov es, ax
 ; sectors to read count
 mov al, 17
 ; cylinder
-mov ch, 0x00
+mov ch, 0
 ; sector
-mov cl, 0x02
+mov cl, 2
 ; head
-mov dh, 0x00
+mov dh, 0
 ; ES:BX is the buffer address pointer
 mov bx, boot_code_second_step_addr
 call read_sectors
@@ -275,32 +275,32 @@ call copy_os_image_to_memory
 jmp halt_boot_sector
 
 draw_progress_bar_frame:
-	; (60, 140) ... (260, 140)
+	; (60, 147) ... (260, 147)
 	%define vga_color_gray 0x07
 	mov ax, vga_segment
 	mov es, ax
-	mov di, 140 * vga_columns + 60
+	mov di, 147 * vga_columns + 60
 	mov cx, 260 - 60
 	mov al, vga_color_gray
 	rep stosb
 
-	; (60, 160) ... (260, 160)
-	mov di, 160 * vga_columns + 60
+	; (60, 153) ... (260, 153)
+	mov di, 153 * vga_columns + 60
 	mov cx, 260 - 60 + 1
 	rep stosb
 
-	; (60, 140) ... (60, 160)
-	mov cx, 20
-	mov ax, 160 * vga_columns + 60
+	; (60, 147) ... (60, 153)
+	mov cx, 6
+	mov ax, 153 * vga_columns + 60
 	.left_vertical:
 	sub ax, vga_columns
 	mov di, ax
 	mov byte [es:di], vga_color_gray
 	loop .left_vertical
 
-	; (260, 140) ... (260, 160)
-	mov cx, 20
-	mov ax, 160 * vga_columns + 260
+	; (260, 147) ... (260, 153)
+	mov cx, 6
+	mov ax, 153 * vga_columns + 260
 	.right_vertical:
 	sub ax, vga_columns
 	mov di, ax
@@ -309,20 +309,73 @@ draw_progress_bar_frame:
 
 	ret
 
+%macro draw_horizontal_line 3
+	; (%1, %3) ... (%2, %3)
+	; e.g. (60, 150) ... (80, 150)
+	mov ax, vga_segment
+	mov es, ax
+	mov di, %3 * vga_columns + %1
+	mov cx, %2 - %1
+	mov al, vga_color_gray
+	rep stosb
+%endmacro
+
+%macro load_sectors 4
+	; (%1, %2, 1) ... (%1, %2, %3) -> %4
+	; e.g. (0, 1, 1) ... (0, 1, 18) -> 0x00a000 - 0x00c400 [9216 bytes]
+	xor ax, ax
+	mov es, ax
+	; sectors to read count
+	mov al, %3
+	; cylinder
+	mov ch, %1
+	; head
+	mov dh, %2
+	; sector
+	mov cl, 1
+	; ES:BX is the buffer address pointer
+	mov bx, %4
+	call read_sectors
+	jc error_boot_sector
+%endmacro
+
 ; Copy OS image from disk to RAM.
 ;  We assume high density floppy disk geometry:
 ;  - 80 tracks (cylinders)
 ;  - 18 sectors per track
 ;  - 2 heads
-;  For simplicity, 900 sectors will be read one by one into the address range:
-;   0x00009d8b - 0x0007a58b (460800 bytes in total).
-;  Sectors read: from LBA 19 (0, 1, 1) until LBA 918 (25, 0, 18).
+;  Read 48 sectors (24576 bytes) from LBA 19 (0, 1, 1) until
+;  LBA 66 (1, 1, 12) to address range 0x00a000 - 0x010000.
 ;  Check out util/lba2chs.py to see how the calculation is performed.
-;  Buffer at 0x00001100 - 0x00001300 (512 bytes) is used as temporary storage.
 copy_os_image_to_memory:
-	; TODO
+	; restore drive number
+	mov word dx, [boot_drive_addr]
+
+	; (0, 1, 1) ... (0, 1, 18) -> 0x00a000 - 0x00c400 [9216 bytes]
+	load_sectors 0, 1, 18, 0xa000
+
+	draw_horizontal_line 60, 80, 148
+	draw_horizontal_line 60, 80, 149
+	draw_horizontal_line 60, 80, 150
+	draw_horizontal_line 60, 80, 151
+	draw_horizontal_line 60, 80, 152
+
+	; (1, 0, 1) ... (1, 0, 18) -> 0x00c400 - 0x00e800 [9216 bytes]
+	load_sectors 1, 0, 18, 0xc400
+
+	draw_horizontal_line 80, 100, 148
+	draw_horizontal_line 80, 100, 149
+	draw_horizontal_line 80, 100, 150
+	draw_horizontal_line 80, 100, 151
+	draw_horizontal_line 80, 100, 152
+
+	; (1, 1, 1) ... (1, 1, 12) -> 0x00e800 - 0x010000 [6658 bytes]
+	load_sectors 1, 1, 12, 0xe800
+
+	draw_horizontal_line 100, 120, 148
+	draw_horizontal_line 100, 120, 149
+	draw_horizontal_line 100, 120, 150
+	draw_horizontal_line 100, 120, 151
+	draw_horizontal_line 100, 120, 152
+
 	ret
-
-; fill the rest of the second stage boot loader with zeroes
-times (512 + 8074) - ($ - $$) db 0
-
