@@ -270,9 +270,10 @@ dw 0xaa55
 
 call   draw_progress_bar_frame
 call   copy_os_image_to_memory
+call   check_cpuid_supported
 
 ; TODO jump to the kernel code start
-jmp halt_boot_sector
+jmp    halt_boot_sector
 
 draw_progress_bar_frame:
 	; (60, 147) ... (260, 147)
@@ -377,5 +378,30 @@ copy_os_image_to_memory:
 	draw_horizontal_line 100, 120, 150
 	draw_horizontal_line 100, 120, 151
 	draw_horizontal_line 100, 120, 152
+
+	ret
+
+; Checks to see if CPUID instruction is supported. If it's not, panic.
+check_cpuid_supported:
+	; push EFLAGS twice on the stack
+	pushfd
+	pushfd
+	; invert the ID bit
+	xor    dword [esp], 0x00200000
+	; load the EFLAGS with the inverted ID bit
+	popfd
+	; push EFLAGS again (ID bit may remain inverted)
+	pushfd
+	; EAX <- EFLAGS
+	pop    eax
+	; put into EAX changed bits
+	xor    eax, [esp]
+	; restore original EFLAGS
+	popfd
+	; ZF will be 1 if ID bit couldn't be changed, meaning
+	; that CPUID is not supported
+	and    eax, 0x00200000
+	; so it's panic time...
+	je     error_boot_sector
 
 	ret
