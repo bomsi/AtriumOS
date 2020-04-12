@@ -1,0 +1,20 @@
+name: CI
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Install NASM
+      run: |
+        sudo apt-get update
+        sudo apt-get install nasm
+
+    - name: Build the floppy image
+      run: |
+        cd src
+        nasm AtriumOS.asm -fbin -o atrium.flp
