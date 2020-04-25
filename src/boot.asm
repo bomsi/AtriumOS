@@ -1,6 +1,6 @@
 ; Boot loader for AtriumOS
 
-; Copyright (c) 2017-2019 Mislav Bozicevic
+; Copyright (c) 2017-2020 Mislav Bozicevic
 ; All rights reserved.
 
 ; Redistribution and use in source and binary forms, with or without
@@ -264,16 +264,14 @@ dw 0xaa55
 ; second stage boot loader begins here (loaded @ 0x007e00)
 ;  it will:
 ;  - copy the OS image from disk to RAM (and draw the progress bar)
-;  - switch the CPU to protected mode
-;  - relocate the kernel to a high address
-;  - jump to kernel entry point
+;  - switch the CPU to Protected mode
+;  - switch the CPU to Long mode
 
 call   draw_progress_bar_frame
 call   copy_os_image_to_memory
 call   check_cpuid_supported
-
-; TODO jump to the kernel code start
-jmp    halt_boot_sector
+; we jump to the protected mode without any intention of going back
+jmp    switch_to_protected_mode
 
 draw_progress_bar_frame:
 	; (60, 147) ... (260, 147)
@@ -405,3 +403,111 @@ check_cpuid_supported:
 	je     error_boot_sector
 
 	ret
+
+; GDT to map the entire "low" memory (<1 MB)
+gdt_start:
+; offset 0x00
+.null_descriptor:
+	dq   0
+; offset 0x08; for CS (bytes 0 until 1 048 575)
+.code_descriptor:
+	; segment limit (bits 0-15)
+	dw   0xffff
+	; base address (bits 0-15)
+	dw   0
+	; base address (bits 16-23)
+	db   0
+	;    P      ... segment Present
+	;    | DPL  ... Descriptor Privilege Level
+	;    | |  S ... descriptor type (0 = System, 1 = code or data)
+	;    | |  | Type field: Code (Execute/Read)
+	;    | |  | |
+	db   1_00_1_1010b
+	;    G ... Granularity (for the segment limit field)
+	;    | D/B ... Default operation size
+	;    | | reserved, always set to 0
+	;    | | | AVL ... AVaiLable for system use
+	;    | | | | segment limit (bits 16-19)
+	;    | | | | |
+	db   0_1_0_0_1111b
+	; base address (bits 24-31)
+	db   0
+; offset 0x10; for DS, SS, ES, FS, GS (bytes 0 until 1 048 575)
+.data_descriptor:
+	; segment limit (bits 0-15)
+	dw   0xffff
+	; base address (bits 0-15)
+	dw   0
+	; base address (bits 16-23)
+	db   0
+	;    P      ... segment Present
+	;    | DPL  ... Descriptor Privilege Level
+	;    | |  S ... descriptor type (0 = System, 1 = code or data)
+	;    | |  | Type field: Data (Read/Write)
+	;    | |  | |
+	db   1_00_1_0010b
+	;    G ... Granularity (for the segment limit field)
+	;    | D/B ... Default operation size
+	;    | | reserved, always set to 0
+	;    | | | AVL ... AVaiLable for system use
+	;    | | | | segment limit (bits 16-19)
+	;    | | | | |
+	db   0_1_0_0_1111b
+	; base address (bits 24-31)
+	db   0
+gdt_end:
+
+initial_gdt:
+	dw   gdt_end - gdt_start - 1
+	dd   gdt_start
+
+switch_to_protected_mode:
+; disable interrupts
+cli
+; load the GDT
+lgdt   [initial_gdt]
+
+mov    eax, cr0
+; set PE (Protection Enable)
+or     al, 1
+mov    cr0, eax
+; set CS to 0x08 (see GDT)
+jmp    0x08:protected_mode_entry
+
+%macro pmode_draw_horizontal_line 3
+	; (%1, %3) ... (%2, %3)
+	; e.g. (60, 150) ... (80, 150)
+	mov    edi, 0xa0000 + %3 * vga_columns + %1
+	mov    ecx, %2 - %1
+	mov    al, vga_color_gray
+	rep    stosb
+%endmacro
+
+; 32-bit code
+[bits 32]
+protected_mode_entry:
+
+; set DS, SS, ES, FS, GS to 0x10 (see GDT)
+mov    ax, 0x10
+mov    ds, ax
+mov    ss, ax
+mov    es, ax
+mov    fs, ax
+mov    gs, ax
+
+; reset the stack
+mov    ebp, 0x1000
+mov    esp, ebp
+
+; update the progress bar
+pmode_draw_horizontal_line 120, 140, 148
+pmode_draw_horizontal_line 120, 140, 149
+pmode_draw_horizontal_line 120, 140, 150
+pmode_draw_horizontal_line 120, 140, 151
+pmode_draw_horizontal_line 120, 140, 152
+
+; TODO switch the CPU to Long mode
+
+pmode_halt:
+hlt
+jmp    pmode_halt
