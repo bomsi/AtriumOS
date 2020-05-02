@@ -6,6 +6,7 @@ Just a hobby operating system, nothing big and professional.
 
 Here's an overview of requirements to run Atrium OS. Currently it is tested in
 a virtual machine with the following configuration:
+* CPU: x86-64
 * RAM: 4 MB
 * Storage: Floppy drive
 

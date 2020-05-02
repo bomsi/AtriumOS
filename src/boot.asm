@@ -25,7 +25,7 @@
 ; OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 ; OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-cpu 486
+cpu X64
 
 ; 16-bit code
 [bits 16]
@@ -270,6 +270,7 @@ dw 0xaa55
 call   draw_progress_bar_frame
 call   copy_os_image_to_memory
 call   check_cpuid_supported
+call   check_long_mode_supported
 ; we jump to the protected mode without any intention of going back
 jmp    switch_to_protected_mode
 
@@ -404,6 +405,25 @@ check_cpuid_supported:
 
 	ret
 
+; Checks if long mode is supported. If it's not, panic.
+check_long_mode_supported:
+	; get the "Largest Extended Function Number"
+	mov    eax, 0x80000000
+	cpuid
+	; if no function > 0x80000000, long mode is not supported
+	cmp    eax, 0x80000000
+	; so it's panic time...
+	jbe    error_boot_sector
+	; get "Feature Identifiers"
+	mov    eax, 0x80000001
+	cpuid
+	; test if bit 29 is set ("LM: long mode")
+	bt     edx, 29
+	; if it's not set, panic...
+	jnc    error_boot_sector
+
+	ret
+
 ; GDT to map the entire "low" memory (<1 MB)
 gdt_start:
 ; offset 0x00
@@ -423,8 +443,8 @@ gdt_start:
 	;    | |  | Type field: Code (Execute/Read)
 	;    | |  | |
 	db   1_00_1_1010b
-	;    G ... Granularity (for the segment limit field)
-	;    | D/B ... Default operation size
+	;    G         ... Granularity (for the segment limit field)
+	;    | D/B     ... Default operation size
 	;    | | reserved, always set to 0
 	;    | | | AVL ... AVaiLable for system use
 	;    | | | | segment limit (bits 16-19)
@@ -446,8 +466,8 @@ gdt_start:
 	;    | |  | Type field: Data (Read/Write)
 	;    | |  | |
 	db   1_00_1_0010b
-	;    G ... Granularity (for the segment limit field)
-	;    | D/B ... Default operation size
+	;    G         ... Granularity (for the segment limit field)
+	;    | D/B     ... Default operation size
 	;    | | reserved, always set to 0
 	;    | | | AVL ... AVaiLable for system use
 	;    | | | | segment limit (bits 16-19)
