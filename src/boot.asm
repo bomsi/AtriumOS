@@ -222,6 +222,7 @@ detect_memory:
 	jz     .skip_entry
 	; this is a valid entry, increase count
 	inc    bp
+	; TODO verify we're not above 1500 to prevent overflow into boot code
 	add    di, 20
 
 	.skip_entry:
@@ -526,8 +527,98 @@ pmode_draw_horizontal_line 120, 140, 150
 pmode_draw_horizontal_line 120, 140, 151
 pmode_draw_horizontal_line 120, 140, 152
 
-; TODO switch the CPU to Long mode
+; perform identity mapping on the first 1 MB
+%define page_tables_base 0x10000
+; page_tables_base is the address of PML4
+mov    edi, page_tables_base
+mov    ecx, 4096
+xor    eax, eax
+; clear 4096 * 4 bytes for the tables
+rep    stosd
 
-pmode_halt:
+%define page_entry_flags 00000000_00000000_00000000_00000011b
+;                                                         ||
+;                                         Present bit ... P|
+;                                      Read/Write bit ...  W
+
+; Page Map Level 4
+mov    edi, page_tables_base
+lea    eax, [edi + 0x1000]
+or     eax, page_entry_flags
+; PML4T[0] -> PDPT
+mov    dword [edi], eax
+
+; Page Directory Pointer Table
+lea    eax, [edi + 0x2000]
+or     eax, page_entry_flags
+; PDPT[0] -> PDT
+mov    dword [edi + 0x1000], eax
+
+; Page Directory
+lea    eax, [edi + 0x3000]
+or     eax, page_entry_flags
+; PDT[0] -> PT
+mov    dword [edi + 0x2000], eax
+
+; Page Table
+lea    edi, [edi + 0x3000]
+mov    eax, page_entry_flags
+next_page_table_entry:
+mov    [edi], eax
+add    eax, 0x1000
+add    edi, 8
+cmp    eax, 0x100000
+jb     short next_page_table_entry
+
+; current memory map:
+;  0x0500 -  0x1000 ... stack
+;  0x2000 -  0x2002 ... BIOS boot drive identifier
+;  0x2003 -  0x2004 ... memory map entry count
+;  0x2005 -  0x7bff ... memory map entries (max 1500 entries)
+;  0x7c00 - 0x10000 ... boot loader with kernel image (code and data)
+; 0x10000 - 0x14000 ... paging tables
+
+mov    eax, cr4
+; enable physical-address (PAE) extensions by setting CR4.PAE bit
+bts    eax, 5
+mov    cr4, eax
+
+; load CR3 with the address of PML4
+mov    eax, page_tables_base
+mov    cr3, eax
+
+; enable long mode
+mov    ecx, 0xc0000080
+; 0xc0000080 = EFER MSR number
+rdmsr
+; set EFER.LME bit
+bts    eax, 8
+wrmsr
+
+; enable paging to activate long mode
+mov    eax, cr0
+bts    eax, 31
+mov    cr0, eax
+
+jmp    0x08:long_mode_entry
+
+%macro lmode_draw_horizontal_line 3
+	mov    rdi, 0xa0000 + %3 * vga_columns + %1
+	mov    rcx, %2 - %1
+	mov    al, vga_color_gray
+	rep    stosb
+%endmacro
+
+; 64-bit code
+[bits 64]
+long_mode_entry:
+
+lmode_draw_horizontal_line 140, 150, 148
+lmode_draw_horizontal_line 140, 150, 149
+lmode_draw_horizontal_line 140, 150, 150
+lmode_draw_horizontal_line 140, 150, 151
+lmode_draw_horizontal_line 140, 150, 152
+
+lmode_halt:
 hlt
-jmp    pmode_halt
+jmp    lmode_halt
