@@ -570,14 +570,6 @@ add    edi, 8
 cmp    eax, 0x100000
 jb     short next_page_table_entry
 
-; current memory map:
-;  0x0500 -  0x1000 ... stack
-;  0x2000 -  0x2002 ... BIOS boot drive identifier
-;  0x2003 -  0x2004 ... memory map entry count
-;  0x2005 -  0x7bff ... memory map entries (max 1500 entries)
-;  0x7c00 - 0x10000 ... boot loader with kernel image (code and data)
-; 0x10000 - 0x14000 ... paging tables
-
 mov    eax, cr4
 ; enable physical-address (PAE) extensions by setting CR4.PAE bit
 bts    eax, 5
@@ -619,6 +611,4 @@ lmode_draw_horizontal_line 140, 150, 150
 lmode_draw_horizontal_line 140, 150, 151
 lmode_draw_horizontal_line 140, 150, 152
 
-lmode_halt:
-hlt
-jmp    lmode_halt
+jmp    kernel_entry
