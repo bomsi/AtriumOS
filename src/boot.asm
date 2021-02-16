@@ -1,6 +1,6 @@
 ; Boot loader for AtriumOS
 
-; Copyright (c) 2017-2020 Mislav Bozicevic
+; Copyright (c) 2017-2021 Mislav Bozicevic
 ; All rights reserved.
 
 ; Redistribution and use in source and binary forms, with or without
@@ -601,6 +601,63 @@ jmp    0x08:long_mode_entry
 	rep    stosb
 %endmacro
 
+gdt64_start:
+; offset 0x00
+.null_descriptor:
+	dq   0
+; offset 0x08; for CS (bytes 0 until 1 048 575)
+.code_descriptor:
+	; segment limit (bits 0-15)
+	dw   0xffff
+	; base address (bits 0-15)
+	dw   0
+	; base address (bits 16-23)
+	db   0
+	;    P      ... segment Present
+	;    | DPL  ... Descriptor Privilege Level
+	;    | |  S ... descriptor type (0 = System, 1 = code or data)
+	;    | |  | Type field: Code (Execute/Read)
+	;    | |  | |
+	db   1_00_1_1010b
+	;    G         ... Granularity (for the segment limit field)
+	;    | D/B     ... Default operation size
+	;    | | L     ... Long attribute bit
+	;    | | | AVL ... AVaiLable for system use
+	;    | | | | segment limit (bits 16-19)
+	;    | | | | |
+	db   0_1_1_0_1111b
+	; base address (bits 24-31)
+	db   0
+; offset 0x10; for DS, SS, ES, FS, GS (bytes 0 until 1 048 575)
+.data_descriptor:
+	; segment limit (bits 0-15)
+	dw   0xffff
+	; base address (bits 0-15)
+	dw   0
+	; base address (bits 16-23)
+	db   0
+	;    P      ... segment Present
+	;    | DPL  ... Descriptor Privilege Level
+	;    | |  S ... descriptor type (0 = System, 1 = code or data)
+	;    | |  | Type field: Data (Read/Write)
+	;    | |  | |
+	db   1_00_1_0010b
+	;    G         ... Granularity (for the segment limit field)
+	;    | D/B     ... Default operation size
+	;    | | reserved, always set to 0
+	;    | | | AVL ... AVaiLable for system use
+	;    | | | | segment limit (bits 16-19)
+	;    | | | | |
+	db   0_1_0_0_1111b
+	; base address (bits 24-31)
+	db   0
+gdt64_end:
+
+initial_gdt64:
+	dw   gdt64_end - gdt64_start - 1
+	dd   gdt64_start
+
+
 ; 64-bit code
 [bits 64]
 long_mode_entry:
@@ -611,4 +668,14 @@ lmode_draw_horizontal_line 140, 150, 150
 lmode_draw_horizontal_line 140, 150, 151
 lmode_draw_horizontal_line 140, 150, 152
 
+; load the 64-bit GDT
+lgdt   [initial_gdt64]
+mov    ax, 0x10
+mov    ds, ax
+mov    es, ax
+mov    fs, ax
+mov    gs, ax
+mov    ss, ax
+
 jmp    kernel_entry
+

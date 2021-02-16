@@ -1,6 +1,6 @@
 ; AtriumOS kernel
 
-; Copyright (c) 2017-2020 Mislav Bozicevic
+; Copyright (c) 2017-2021 Mislav Bozicevic
 ; All rights reserved.
 
 ; Redistribution and use in source and binary forms, with or without
@@ -43,8 +43,6 @@ xor    rax, rax
 xor    rbx, rbx
 xor    rcx, rcx
 xor    rdx, rdx
-xor    rbp, rbp
-mov    rsp, 0x1000
 xor    rdi, rdi
 xor    rsi, rsi
 xor    r8, r8
@@ -56,7 +54,10 @@ xor    r13, r13
 xor    r14, r14
 xor    r15, r15
 
-; TODO initialize 64-bit version of GDT, LDT, IDT, TSS.
+mov    rbp, 0x1000
+mov    rsp, rbp
+
+; TODO initialize 64-bit version of LDT, IDT, TSS
 
 kernel_end:
 hlt
