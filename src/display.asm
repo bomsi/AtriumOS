@@ -40,6 +40,16 @@
 ; Little-endian 64-bit:
 ;  0x66667e7e66663c18
 
+bitmap:
+.A: dq 0x66667e7e66663c18
+.t: dq 0x183c0c0c3e3e0c0c
+.r: dq 0x0c0c0c3c7c6c0000
+.i: dq 0x1818181818001818
+.u: dq 0xbce6c2c2c2c20000
+.m: dq 0x5656567e7e560000
+.O: dq 0x187e664242667e18
+.S: dq 0x7ceec0f80e06ee7c
+
 ; Draws the 8x8 bitmap.
 ; Input:
 ;  R8  - bitmap to draw
@@ -112,7 +122,7 @@ draw:
         inc    r13
 	mov    r15, r13
 	and    r15, 0x7
-	; if r13 % 8 ==0, increment y
+	; if r13 % 8 == 0, increment y
 	test   r15, r15
 	jnz    short .y_unchanged
 	inc    rdx

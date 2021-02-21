@@ -57,9 +57,55 @@ xor    r15, r15
 mov    rbp, 0x1000
 mov    rsp, rbp
 
+call   draw_os_name
+
 ; TODO initialize 64-bit version of LDT, IDT, TSS
 
 kernel_end:
 hlt
 jmp    short kernel_end
+
+draw_os_name:
+	pushfq
+	push   r8
+	push   r9
+	push   r10
+	push   r11
+	push   r12
+
+	mov    r8, [bitmap.A]
+	mov    r9, 120
+	mov    r10, 80
+	mov    r11, 0x07
+	mov    r12, 0x08
+	call   draw
+	mov    r8, [bitmap.t]
+	add    r9, 9
+	call   draw
+	mov    r8, [bitmap.r]
+	add    r9, 9
+	call   draw
+	mov    r8, [bitmap.i]
+	add    r9, 9
+	call   draw
+	mov    r8, [bitmap.u]
+	add    r9, 9
+	call   draw
+	mov    r8, [bitmap.m]
+	add    r9, 9
+	call   draw
+	mov    r8, [bitmap.O]
+	add    r9, 9
+	call   draw
+	mov    r8, [bitmap.S]
+	add    r9, 9
+	call   draw
+
+	pop    r12
+	pop    r11
+	pop    r10
+	pop    r9
+	pop    r8
+	popfq
+	ret
 
