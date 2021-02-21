@@ -63,5 +63,3 @@ kernel_end:
 hlt
 jmp    short kernel_end
 
-; fill the rest with zeroes
-times 1474560 - ($ - $$) db 0

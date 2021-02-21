@@ -29,5 +29,9 @@
 ; nasm AtriumOS.asm -fbin -o atrium.flp
 
 %include "boot.asm"
+%include "display.asm"
 %include "kernel.asm"
+
+; fill the rest with zeroes
+times 1474560 - ($ - $$) db 0
 
