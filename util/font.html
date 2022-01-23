@@ -1,0 +1,104 @@
+<html lang="en">
+<head>
+	<title>Quick and dirty font editor for AtriumOS</title>
+</head>
+<body>
+	<label>Value:
+		<input id="h" type="text" />
+	</label>
+	<canvas id="c" width="800" height="800" />	
+	<script type="text/javascript">
+		var h = document.getElementById('h');
+		var c = document.getElementById('c');
+		var ctx = c.getContext('2d');
+		var dots = [];
+		ctx.fillStyle = '#fafafafa';
+		ctx.fillRect(0, 0, 800, 800);
+		c.addEventListener('click', function(event) {
+			var x = event.pageX - c.offsetLeft + c.clientLeft;
+			var y = event.pageY - c.offsetTop + c.clientTop;
+
+			dots.forEach(function(e) {
+				if (y > e.top && y < e.top + e.height && x > e.left && x < e.left + e.width) {
+					i = Math.floor(x / 100) + Math.floor(y / 100) * 8;
+					if (dots[i].selected) {
+						ctx.fillStyle = dots[i].fillcolour;
+						ctx.fillRect(dots[i].left, dots[i].top, dots[i].width - 1, dots[i].height - 1);
+						dots[i].selected = false;
+					}
+					else {
+						ctx.fillStyle = dots[i].bordercolour;
+						ctx.fillRect(dots[i].left, dots[i].top, dots[i].width - 1, dots[i].height - 1);
+						dots[i].selected = true;
+					}
+				}
+			});
+			var h = '0x';
+			for (let i = 7; i >= 0; i--) {
+				var r = 0;
+				for (let j = 7; j >= 0; j--) {
+					if (dots[i * 8 + j].selected) {
+						r += Math.pow(2, j);
+					}
+				}
+				if (r == 0) {
+					h += '00';
+				}
+				else if (r < 16) {
+					h += '0';
+					h += r.toString(16);
+				}
+				else {
+					h += r.toString(16);
+				}
+			}
+			document.getElementById('h').value = h;
+		}, false);
+
+		for (let i = 0; i < 800; i += 100) {
+			for (let j = 0; j < 800; j += 100) {
+				dots.push({
+					selected: false,
+					fillcolour: '#ffffff',
+					bordercolour: '#000000',
+					width: 100,
+					height: 100,
+					top: i,
+					left: j
+				});
+			}
+		}
+
+		dots.forEach(function(e) {
+			ctx.fillStyle = e.bordercolour;
+			ctx.fillRect(e.left, e.top, e.width, e.height);
+			ctx.fillStyle = e.fillcolour;
+			ctx.fillRect(e.left, e.top, e.width - 1, e.height - 1);
+		});
+
+		h.value = '0x0000000000000000';
+		h.addEventListener('change', function(event) {
+			var re = /^0[x][0-9a-f]{16}$/
+			if (re.exec(h.value)) {
+				var v = h.value.substring(2);
+				for (let i = 0; i < 8; i++) {
+					var b = parseInt(v.substring(i * 2, i * 2 + 2), 16).toString(2).padStart(8, '0');
+					for (let j = 0; j < 8; j++) {
+						var ti = (7 - i) * 8 + (7 - j);
+						if (b[j] == '1') {
+							dots[ti].selected = true;
+							ctx.fillStyle = dots[ti].bordercolour;
+							ctx.fillRect(dots[ti].left, dots[ti].top, dots[ti].width - 1, dots[ti].height - 1);
+						}
+						else {
+							dots[ti].selected = false;
+							ctx.fillStyle = dots[ti].fillcolour;
+							ctx.fillRect(dots[ti].left, dots[ti].top, dots[ti].width - 1, dots[ti].height - 1);
+						}
+					}
+				}
+			}
+		}, false);
+	</script>
+</body>
+</html>
